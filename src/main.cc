@@ -1,12 +1,13 @@
 // copyright 2026 coletm
 
-#include"proj3/lib/include/mmap.h"
 #include<unistd.h>
 #include<sys/stat.h>
 #include<iostream>
 #include<string>
 #include<cstring>
 #include<vector>
+#include<algorithm>
+#include"proj3/lib/include/mmap.h"
 
 // helper function to print usage message
 void print_usage() {
@@ -43,7 +44,7 @@ int create(const char* path, char fill_char, std::size_t size) {
   proj3::msync(map, size, proj3::MS_SYNC);
   proj3::munmap(map, size);
   proj3::close(fd);
-  
+
   return 0;
 }
 
@@ -55,13 +56,13 @@ int insert(const char* path, std::size_t offset, std::size_t bytes_incoming) {
       << "bytes were read" << std::endl;
     return 1;
   }
-  
+
   // open up file and get its size
   int fd = proj3::open(path, proj3::O_RDWR);
   struct stat f_stat;
   proj3::fstat(fd, &f_stat);
   std::size_t old_size = static_cast<std::size_t>(f_stat.st_size);
-  
+
   // make sure that offset is not greater than file size
   if (offset > old_size) {
     std::cerr << "error: offset " << offset << " exceeds file size "
@@ -69,24 +70,24 @@ int insert(const char* path, std::size_t offset, std::size_t bytes_incoming) {
     proj3::close(fd);
     return 1;
   }
-  
+
   // make backup of file to restore in case of error
   std::vector<uint8_t> backup(old_size);
   void* temp = proj3::mmap(nullptr, old_size, proj3::PROT_READ,
                                     proj3::MAP_SHARED, fd, 0);
   std::memcpy(backup.data(), temp, old_size);
   proj3::munmap(temp, old_size);
-  
+
   try {
     // resize file to fit added contents
     std::size_t new_size = old_size + bytes_incoming;
     proj3::ftruncate(fd, static_cast<off_t>(new_size));
-    
+
     // map newly sized file
     void* map = proj3::mmap(nullptr, new_size, proj3::PROT_READ |
                             proj3::PROT_WRITE, proj3::MAP_SHARED, fd, 0);
     uint8_t* data = static_cast<uint8_t*>(map);
-    
+
     // move data after the insert to its new location
     std::memmove(data + offset + bytes_incoming, data + offset,
                   old_size - offset);
@@ -102,7 +103,7 @@ int insert(const char* path, std::size_t offset, std::size_t bytes_incoming) {
     proj3::ftruncate(fd2, static_cast<off_t>(old_size));
     void* map2 = proj3::mmap(nullptr, old_size, proj3::PROT_READ |
                               proj3::PROT_WRITE, proj3::MAP_SHARED, fd2, 0);
-    
+
     std::memcpy(map2, backup.data(), old_size);
     proj3::msync(map2, old_size, proj3::MS_SYNC);
     proj3::munmap(map2, old_size);
@@ -120,11 +121,11 @@ int append(const char* path, std::size_t bytes_incoming) {
   struct stat f_stat;
   proj3::fstat(fd, &f_stat);
   std::size_t file_size = static_cast<std::size_t>(f_stat.st_size);
-  
+
   std::size_t original_size = file_size;
   std::size_t remaining = bytes_incoming;
   std::size_t write_offset = file_size;
-  
+
   // continue appending until all new bytes have been written
   while (remaining > 0) {
     // each addition being written at a time is either all of the new bytes, or
